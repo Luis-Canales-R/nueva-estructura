@@ -1,0 +1,152 @@
+//================================================================================
+// Modelo de Datos v8.1 - Centro de Mando (Sintaxis Final Corregida)
+// Este modelo permite a un paciente participar en múltiples estudios a lo largo del tiempo,
+// manteniendo una integridad histórica perfecta. Es el diseño más robusto.
+//================================================================================
+
+//--------------------------------
+// Tablas Fundamentales
+//--------------------------------
+Table "T0_Registro_Demografico_PII" as T0 {
+  "ID_Paciente_Clinico" int [pk, note: 'Clave creada manualmente. Enlace 1-a-1 al ID_Paciente de T2.']
+  "Nombre_Completo" varchar [note: 'Fórmula que concatena Nombre y Apellidos']
+  "Nombre_Paciente" varchar
+  "Apellidos_Paciente" varchar
+  "RUT" varchar [unique]
+  "Sexo" varchar
+  "Fecha_Nacimiento" date
+  "Edad" int [note: 'Fórmula calculada a partir de Fecha de Nacimiento']
+  "Nacionalidad" varchar
+  "Direccion" varchar
+  "Comuna" varchar
+  "Ciudad" varchar
+  "Telefono" varchar
+  "Correo" varchar
+  "Datos_Bancarios" varchar [note: 'Información sensible para viáticos']
+}
+
+Table "T1_Maestro_Estudios" as T1 {
+  "ID_Estudio" int [pk, increment]
+  "Nombre_Protocolo" varchar [unique]
+  "Sponsor" varchar
+  "Estado_Estudio" varchar [note: 'Ej: Puesta en Marcha, Reclutando, Seguimiento, Cerrado']
+  "Fase_Ensayo" varchar [note: 'Ej: Fase I, Fase II, Fase III']
+  "Coordinador_Principal" varchar
+  "Fecha_Inicio_Reclutamiento" date
+  "Fecha_Cierre_Proyectada" date
+}
+
+Table "T2_Maestro_Pacientes_Anon" as T2 {
+  "ID_Paciente" int [pk, increment, note: 'Registro único y permanente por persona.']
+  // Esta tabla ya no contiene información del estudio.
+}
+
+//--------------------------------
+// NUEVA TABLA CLAVE: El Registro de Inscripciones
+//--------------------------------
+Table "T10_Inscripciones_Estudio" as T10 {
+  "ID_Inscripcion" int [pk, increment, note: 'Clave única para cada participación de un paciente en un estudio.']
+  "ID_Paciente_FK" int [ref: > T2.ID_Paciente, note: 'Qué paciente se inscribió.']
+  "ID_Estudio_FK" int [ref: > T1.ID_Estudio, note: 'En qué estudio se inscribió.']
+  "Estado_Inscripcion" varchar [note: 'Activa, Completada, Retirado, Fallo de Screening.']
+  "Nro_Screening" varchar
+  "Fecha_Consentimiento" datetime
+  "Nro_Random" varchar
+  "Fecha_Randomizacion" datetime
+  "Motivo_Salida_Fallo" varchar
+  "Fecha_Fin_Participacion" date
+}
+
+//--------------------------------
+// Motor Financiero y de Precios (Acceso Finanzas)
+//--------------------------------
+Table "T3_Lista_Precios_Estudio" as T3 {
+  "ID_Precio_Estudio" int [pk, increment]
+  "ID_Estudio_FK" int [ref: > T1.ID_Estudio]
+  "Nombre_Item_Facturable" varchar [note: 'Ej: "Ciclo 1 Día 1", "Reembolso CX OSEO"']
+  "Valor_Acordado" decimal(10, 2)
+  "Orden_Flowchart" int [note: 'Número para ordenar el cronograma.']
+  "Es_Visita_Paciente" bool [note: 'Ayuda a saber si se debe asociar a un paciente.']
+  "Version_Enmienda" varchar [note: 'Ej: "Protocolo Inicial", "Enmienda 1"']
+  "Esta_Activo" bool [note: 'Indica si este es el precio vigente para nuevos registros.']
+}
+
+//--------------------------------
+// Módulo Operativo (ENLACE ACTUALIZADO)
+//--------------------------------
+Table "T4_Registro_Eventos_Clinicos" as T4 {
+  "ID_Evento" int [pk, increment]
+  "ID_Inscripcion_FK" int [ref: > T10.ID_Inscripcion, note: 'ENLACE CLAVE: A qué inscripción pertenece este evento.']
+  "Fecha_Evento" datetime
+  "Tipo_Evento" varchar [note: 'Visita Programada, Evento Adverso, Desviación, etc.']
+  "Detalle_Evento" text [note: 'Aquí el coordinador escribe lo que pasó, ej: "Ciclo 3 Día 1".']
+  "Estado_Evento" varchar [note: 'Completado, Retrasado, Cancelado.']
+  "Comentarios_Clinicos" text
+}
+
+//--------------------------------
+// Módulo de Autorizaciones (ENLACE ACTUALIZADO)
+//--------------------------------
+Table "T5_Cartas_de_Resguardo_Emitidas" as T5 {
+  "ID_Carta_Resguardo" int [pk, increment]
+  "Numero_Carta" varchar [unique, note: 'Número único generado por Power Automate']
+  "ID_Inscripcion_FK" int [ref: > T10.ID_Inscripcion, note: 'ENLACE CLAVE: Carta emitida para esta inscripción específica.']
+  "Fecha_Emision" date
+  "Convenio_Destino" varchar
+  "Motivo_Emision" varchar [note: 'Procedimiento de Protocolo, Evento Adverso, SAE']
+  "Descripcion_Autorizada" text
+  "ID_Evento_Clinico_FK" int [ref: <> T4.ID_Evento, note: 'Enlace opcional al evento adverso que la originó.']
+  "Estado_Carta" varchar [note: 'Emitida, Utilizada, Anulada']
+}
+
+//--------------------------------
+// Módulo de Costos de Terceros (Convenios) (ENLACE ACTUALIZADO)
+//--------------------------------
+Table "T8_Facturas_Convenios_Recibidas" as T8 {
+  "ID_de_Proceso" int [pk]
+  "Estado_del_Pago" varchar
+  "Tipo_de_Factura" varchar
+  "Convenio" varchar
+  "Periodo" varchar
+  "Nro_Pre_Factura" varchar
+  "Monto_Presentado" decimal(10, 2)
+  "Responsable" varchar
+  "Fecha_Aprobacion" date
+  "Nro_Orden_de_Servicio" varchar
+  "Nro_Factura_Proveedor" varchar
+  "Monto_Facturado_Final" decimal(10, 2)
+  "Observaciones" text
+}
+
+Table "T9_Detalle_Prestaciones_Convenio" as T9 {
+  "ID_Prestacion" int [pk, increment]
+  "ID_de_Proceso_FK" int [ref: > T8.ID_de_Proceso]
+  "ID_Inscripcion_FK" int [ref: <> T10.ID_Inscripcion, note: 'ENLACE CLAVE: Prestación para esta inscripción específica.']
+  "ID_Carta_Resguardo_FK" int [ref: <> T5.ID_Carta_Resguardo, note: 'Enlace a la carta que autorizó este costo.']
+  "Descripcion_Prestacion" varchar
+  "Fecha_Prestacion" date
+  "Monto_Prestacion" decimal(10, 2)
+  "Carta_Resguardo" varchar
+  "RUT_Paciente" varchar
+  "Estudio" varchar
+  "Sponsor" varchar
+  "Es_Reembolsable" bool
+  "Estado_Reembolso" varchar
+}
+
+//--------------------------------
+// Módulo de Facturación (Puente Final) (ENLACE ACTUALIZADO)
+//--------------------------------
+Table "T7_Registro_Financiero_Facturables" as T7 {
+  "ID_Registro_Financiero" int [pk, increment]
+  "ID_Evento_Clinico_FK" int [ref: <> T4.ID_Evento]
+  "ID_Precio_Estudio_FK" int [ref: > T3.ID_Precio_Estudio]
+  "ID_Prestacion_Convenio_FK" int [ref: <> T9.ID_Prestacion]
+  "Estado_Facturacion" varchar
+  "Fecha_Conciliacion" date
+}
+
+//--------------------------------
+// Relación de Seguridad
+//--------------------------------
+Ref: T2.ID_Paciente - T0.ID_Paciente_Clinico
